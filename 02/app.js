@@ -55,15 +55,14 @@ async function execAddCommand() {
   let [validatedAmount, validatedMemo] = [validateAmount(amount), validateMemo(memo)];
   if (!validatedAmount || !validatedMemo) return logErrorInvalidData({ validAmount: validatedAmount, validMemo: validatedMemo });
 
-  let additionQuery = `INSERT INTO expenses(amount, memo) VALUES (${amount}, '${normalizeMemo(memo)}')`;
-  console.log(additionQuery);
+  let additionQuery = "INSERT INTO expenses(amount, memo) VALUES ($1, $2)";
   
   await client
     .connect()
     .catch(error => logErrorAndExit(error));
   
   await client
-    .query(additionQuery)
+    .query(additionQuery, [amount, memo])
     .catch(error => logErrorAndExit(error));
   
   await client
@@ -130,10 +129,6 @@ search QUERY - list expenses with a matching memo field`;
 
   console.log(helpContent)
 };
-
-function normalizeMemo(memo) {
-  return memo.replaceAll("'", "''");
-}
 
 function logErrorAndExit(errorObj) {
   console.log(errorObj.message);
