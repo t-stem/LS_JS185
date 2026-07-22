@@ -119,10 +119,21 @@ class ExpenseData {
     await this.disconnect();
   }
   
+  calcTotal() {
+    if (this.expensesData) {
+      this.total = this.expensesData.rows.reduce((total, row) => total += Number(row.amount), 0);
+    }
+  }
+
   async connect() {
     await this.client
       .connect()
       .catch(error => ExpenseData.logErrorAndExit(error));
+  }
+
+  countExpenses() {
+    if (this.expensesData) this.expenseCount = this.expensesData.rows.length;
+    else this.expenseCount = 0;
   }
 
   async delete(id) {
@@ -160,13 +171,24 @@ class ExpenseData {
     
     try {
       this.expensesData = await this.client.query(ExpenseData.expensesQuery);
+    
+      this.countExpenses();
+      this.logExpenseCount();  
       this.logExpenses();
+      if(this.expenseCount > 1) this.logTotal();
 
     } catch (error) {
       ExpenseData.logErrorAndExit(error);
     }
 
     await this.disconnect();
+  }
+  
+  logExpenseCount() {
+    if (this.expenseCount === undefined) return;
+    else if (this.expenseCount === 0) console.log('There are no expenses.');
+    else if (this.expenseCount === 1) console.log('There is 1 expense.');
+    else console.log(`There are ${this.expenseCount} expenses.`);
   }
 
   logExpenses() {
@@ -179,6 +201,13 @@ class ExpenseData {
     invalidArgs.forEach(arg => console.log(`You must provide a valid ${arg.name}.`));
   }
 
+  logTotal() {
+    this.calcTotal();
+
+    if (this.total) 
+      console.log(`${'-'.repeat(50)}\nTotal${String(this.total).padStart(31, ' ')}`);
+  }
+
   async search(keyword) {
     await this.connect();
     
@@ -186,7 +215,10 @@ class ExpenseData {
       .query(ExpenseData.searchQuery, [`%${keyword}%`])
       .catch(error => ExpenseData.logErrorAndExit(error));
 
-    this.logExpenses()
+    this.countExpenses();  
+    this.logExpenseCount();
+    this.logExpenses();
+    if(this.expenseCount > 1) this.logTotal();
     
     await this.disconnect();
   }
