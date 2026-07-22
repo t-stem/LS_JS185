@@ -20,11 +20,11 @@ search QUERY - list expenses with a matching memo field`;
   }
 
   run() {
-    this.args = process.argv;
+    let args = process.argv;
 
-    if (this.args.length < 3) return CLI.help();
+    if (args.length < 3) return CLI.help();
     
-    let [environment, application, command, arg1, arg2] = this.args;
+    let [environment, application, command, arg1, arg2] = args;
     command = command.trim().toLowerCase();
 
     switch (command) {
@@ -33,6 +33,9 @@ search QUERY - list expenses with a matching memo field`;
         break;
       case 'add':
         this.app.add(arg1, arg2);
+        break;
+      case 'search':
+        this.app.search(arg1);
         break;
       default:
         CLI.help();
@@ -45,6 +48,7 @@ class ExpenseData {
 
   static additionQuery = "INSERT INTO expenses(amount, memo) VALUES ($1, $2)";
   static expensesQuery = 'SELECT id, created_on, amount, memo FROM expenses ORDER BY created_on ASC';
+  static searchQuery = 'SELECT id, created_on, amount, memo FROM expenses WHERE memo ILIKE $1';
   
   static logErrorAndExit(errorObj) {
     console.log(errorObj.message);
@@ -127,16 +131,37 @@ class ExpenseData {
     invalidArgs.forEach(arg => console.log(`You must provide a valid ${arg.name}.`));
   }
 
-  validateAmount() {
-    if (this.amount.value.length !== 0 || this.amount.value === 'Infinity') {
-      this.amount.valid = false;
-    }
+  async search(keyword) {
 
-    this.amount.valid = !Number.isNaN(Number(this.amount.value));
+    await this.client
+      .connect()
+      .catch(error => ExpenseData.logErrorAndExit(error));
+    
+    this.expensesData = await this.client
+      .query(ExpenseData.searchQuery, [`%${keyword}%`])
+      .catch(error => ExpenseData.logErrorAndExit(error));
+
+    this.logExpenses()
+    
+    await this.client
+      .end()
+      .catch(error => ExpenseData.logErrorAndExit(error));
+  }
+
+  validateAmount() {
+    this.amount.valid = 
+      this.amount.value !== undefined &&
+      typeof this.amount.value === 'string' &&
+      this.amount.value.length > 0 &&
+      !Number.isNaN(Number(this.amount.value)) &&
+      this.amount.value !== 'Infinity';
   }
   
   validateMemo() {
-    this.memo.valid = (typeof this.memo.value) === 'string';
+    this.memo.valid = 
+      this.memo.value !== undefined &&
+      (typeof this.memo.value) === 'string' &&
+      this.memo.value.length > 0;
   }
 }
 
