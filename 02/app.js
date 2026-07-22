@@ -1,4 +1,5 @@
 const { Client } = require('pg');
+const readlineSync = require('readline-sync');
 
 class CLI {
   static helpContent = `An expense recording system
@@ -31,6 +32,9 @@ search QUERY - list expenses with a matching memo field`;
       case 'add':
         this.app.add(arg1, arg2);
         break;
+      case 'clear':
+        this.app.clear();
+        break;
       case 'delete':
         this.app.delete(arg1);
         break;
@@ -50,10 +54,11 @@ class ExpenseData {
   static clientSettings = { database: 'ls_185_02' };
 
   static additionQuery = "INSERT INTO expenses(amount, memo) VALUES ($1, $2)";
+  static clearQuery = "DELETE FROM expenses"
   static deletionQuery = "DELETE FROM expenses WHERE id = $1";
-  static expensesQuery = 'SELECT id, created_on, amount, memo FROM expenses ORDER BY created_on ASC';
-  static retrieveRecordWithId = 'SELECT id, created_on, amount, memo FROM expenses WHERE id = $1';
-  static searchQuery = 'SELECT id, created_on, amount, memo FROM expenses WHERE memo ILIKE $1';
+  static expensesQuery = "SELECT id, created_on, amount, memo FROM expenses ORDER BY created_on ASC";
+  static retrieveRecordWithId = "SELECT id, created_on, amount, memo FROM expenses WHERE id = $1";
+  static searchQuery = "SELECT id, created_on, amount, memo FROM expenses WHERE memo ILIKE $1";
   
   static logErrorAndExit(errorObj) {
     console.log(errorObj.message);
@@ -85,27 +90,43 @@ class ExpenseData {
 
     if (!this.allArgsValid()) return this.logErrors();
     
-    await this.client
-      .connect()
-      .catch(error => ExpenseData.logErrorAndExit(error));
+    await this.connect();
     
     await this.client
       .query(ExpenseData.additionQuery, [amount, memo])
       .catch(error => ExpenseData.logErrorAndExit(error));
     
-    await this.client
-      .end()
-      .catch(error => ExpenseData.logErrorAndExit(error));
+      await this.disconnect();
   }
 
   allArgsValid() {
     return this.args.every(arg => arg.valid === true);
   }
 
-  async delete(id) {
+  async clear() {
+    let confirmation = readlineSync.question('This will remove all expenses. Are you sure? (enter y to confirm)\n');
+
+    let affirmativeValues = ['y'];
+    if (!affirmativeValues.includes(confirmation)) return;
+
+    await this.connect();
+
+    await this.client
+      .query(ExpenseData.clearQuery)
+      .catch(error => ExpenseData.logErrorAndExit(error));
+    console.log('All expenses have been deleted.');
+
+    await this.disconnect();
+  }
+  
+  async connect() {
     await this.client
       .connect()
       .catch(error => ExpenseData.logErrorAndExit(error));
+  }
+
+  async delete(id) {
+    await this.connect();
 
     let matchingRecords = await this.client
       .query(ExpenseData.retrieveRecordWithId, [id])
@@ -125,17 +146,17 @@ class ExpenseData {
       console.log(`There is no expense with the id '${id}'.`);
     }
         
+    await this.disconnect();
+  }
+
+  async disconnect() {
     await this.client
       .end()
       .catch(error => ExpenseData.logErrorAndExit(error));
   }
 
   async list() {
-    try {
-      await this.client.connect();
-    } catch (error) {
-      ExpenseData.logErrorAndExit(error);
-    }
+    await this.connect();
     
     try {
       this.expensesData = await this.client.query(ExpenseData.expensesQuery);
@@ -145,13 +166,7 @@ class ExpenseData {
       ExpenseData.logErrorAndExit(error);
     }
 
-    try {
-      await this.client.end();
-
-    } catch (error) {
-      ExpenseData.logErrorAndExit(error);
-      
-    }
+    await this.disconnect();
   }
 
   logExpenses() {
@@ -165,10 +180,7 @@ class ExpenseData {
   }
 
   async search(keyword) {
-
-    await this.client
-      .connect()
-      .catch(error => ExpenseData.logErrorAndExit(error));
+    await this.connect();
     
     this.expensesData = await this.client
       .query(ExpenseData.searchQuery, [`%${keyword}%`])
@@ -176,9 +188,7 @@ class ExpenseData {
 
     this.logExpenses()
     
-    await this.client
-      .end()
-      .catch(error => ExpenseData.logErrorAndExit(error));
+    await this.disconnect();
   }
 
   validateAmount() {
