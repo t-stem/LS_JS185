@@ -28,11 +28,14 @@ search QUERY - list expenses with a matching memo field`;
     command = command.trim().toLowerCase();
 
     switch (command) {
-      case 'list':
-        this.app.list();
-        break;
       case 'add':
         this.app.add(arg1, arg2);
+        break;
+      case 'delete':
+        this.app.delete(arg1);
+        break;
+      case 'list':
+        this.app.list();
         break;
       case 'search':
         this.app.search(arg1);
@@ -47,7 +50,9 @@ class ExpenseData {
   static clientSettings = { database: 'ls_185_02' };
 
   static additionQuery = "INSERT INTO expenses(amount, memo) VALUES ($1, $2)";
+  static deletionQuery = "DELETE FROM expenses WHERE id = $1";
   static expensesQuery = 'SELECT id, created_on, amount, memo FROM expenses ORDER BY created_on ASC';
+  static retrieveRecordWithId = 'SELECT id, created_on, amount, memo FROM expenses WHERE id = $1';
   static searchQuery = 'SELECT id, created_on, amount, memo FROM expenses WHERE memo ILIKE $1';
   
   static logErrorAndExit(errorObj) {
@@ -95,6 +100,34 @@ class ExpenseData {
 
   allArgsValid() {
     return this.args.every(arg => arg.valid === true);
+  }
+
+  async delete(id) {
+    await this.client
+      .connect()
+      .catch(error => ExpenseData.logErrorAndExit(error));
+
+    let matchingRecords = await this.client
+      .query(ExpenseData.retrieveRecordWithId, [id])
+      .catch(error => ExpenseData.logErrorAndExit(error));
+    
+    if (matchingRecords.rows.length !== 0) {
+      let matchingRow = matchingRecords.rows[0];
+
+      await this.client
+        .query(ExpenseData.deletionQuery, [id])
+        .catch(error => ExpenseData.logErrorAndExit(error));
+      
+      console.log('following expense has been deleted:');
+      ExpenseData.logExpenseRow(matchingRow);
+
+    } else {
+      console.log(`There is no expense with the id '${id}'.`);
+    }
+        
+    await this.client
+      .end()
+      .catch(error => ExpenseData.logErrorAndExit(error));
   }
 
   async list() {
